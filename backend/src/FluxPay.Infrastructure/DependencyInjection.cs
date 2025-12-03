@@ -44,6 +44,8 @@ public static class DependencyInjection
 
         services.AddSingleton<IEncryptionService, EncryptionService>();
         services.AddSingleton<INonceStore, NonceStore>();
+        services.AddSingleton<IHmacSignatureService, HmacSignatureService>();
+        services.AddSingleton<IRateLimiter, RateLimiter>();
 
         return services;
     }
