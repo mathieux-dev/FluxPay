@@ -89,27 +89,30 @@ public class WebhookServicePropertyTests : IDisposable
         var provider = "pagarme";
         var nonce = Guid.NewGuid();
         
+        var auditService = Substitute.For<IAuditService>();
+        auditService.LogAsync(Arg.Any<AuditEntry>())
+            .Returns(Task.CompletedTask);
+        
         var providerAdapter = Substitute.For<IProviderAdapter>();
         providerAdapter.ValidateWebhookSignatureAsync(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<long>())
             .Returns(false);
 
-        _providerFactory.GetProvider(provider).Returns(providerAdapter);
+        var providerFactory = Substitute.For<IProviderFactory>();
+        providerFactory.GetProvider(provider).Returns(providerAdapter);
 
-        _nonceStore.IsNonceUniqueAsync(Arg.Any<string>(), Arg.Any<string>())
+        var nonceStore = Substitute.For<INonceStore>();
+        nonceStore.IsNonceUniqueAsync(Arg.Any<string>(), Arg.Any<string>())
             .Returns(true);
-
-        _auditService.LogAsync(Arg.Any<AuditEntry>())
-            .Returns(Task.CompletedTask);
 
         var service = new WebhookService(
             _dbContext,
-            _providerFactory,
-            _nonceStore,
+            providerFactory,
+            nonceStore,
             _hmacService,
             _encryptionService,
             _httpClientFactory,
-            _auditService);
+            auditService);
 
         var currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var result = service.ValidateProviderWebhookAsync(
@@ -119,7 +122,7 @@ public class WebhookServicePropertyTests : IDisposable
             currentTimestamp,
             nonce.ToString()).Result;
 
-        _auditService.Received(1).LogAsync(
+        auditService.Received(1).LogAsync(
             Arg.Is<AuditEntry>(e => e.Action == "webhook.rejected.invalid_signature"));
 
         Assert.False(result);
@@ -131,7 +134,8 @@ public class WebhookServicePropertyTests : IDisposable
         var provider = "pagarme";
         var nonce = Guid.NewGuid();
         
-        _auditService.LogAsync(Arg.Any<AuditEntry>())
+        var auditService = Substitute.For<IAuditService>();
+        auditService.LogAsync(Arg.Any<AuditEntry>())
             .Returns(Task.CompletedTask);
 
         var service = new WebhookService(
@@ -141,7 +145,7 @@ public class WebhookServicePropertyTests : IDisposable
             _hmacService,
             _encryptionService,
             _httpClientFactory,
-            _auditService);
+            auditService);
 
         var oldTimestamp = DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeSeconds();
         var result = service.ValidateProviderWebhookAsync(
@@ -151,7 +155,7 @@ public class WebhookServicePropertyTests : IDisposable
             oldTimestamp,
             nonce.ToString()).Result;
 
-        _auditService.Received(1).LogAsync(
+        auditService.Received(1).LogAsync(
             Arg.Is<AuditEntry>(e => e.Action == "webhook.rejected.timestamp_skew"));
 
         Assert.False(result);
@@ -163,20 +167,22 @@ public class WebhookServicePropertyTests : IDisposable
         var provider = "pagarme";
         var nonce = Guid.NewGuid();
         
-        _nonceStore.IsNonceUniqueAsync(Arg.Any<string>(), Arg.Any<string>())
-            .Returns(false);
-
-        _auditService.LogAsync(Arg.Any<AuditEntry>())
+        var auditService = Substitute.For<IAuditService>();
+        auditService.LogAsync(Arg.Any<AuditEntry>())
             .Returns(Task.CompletedTask);
+        
+        var nonceStore = Substitute.For<INonceStore>();
+        nonceStore.IsNonceUniqueAsync(Arg.Any<string>(), Arg.Any<string>())
+            .Returns(false);
 
         var service = new WebhookService(
             _dbContext,
             _providerFactory,
-            _nonceStore,
+            nonceStore,
             _hmacService,
             _encryptionService,
             _httpClientFactory,
-            _auditService);
+            auditService);
 
         var currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var result = service.ValidateProviderWebhookAsync(
@@ -186,7 +192,7 @@ public class WebhookServicePropertyTests : IDisposable
             currentTimestamp,
             nonce.ToString()).Result;
 
-        _auditService.Received(1).LogAsync(
+        auditService.Received(1).LogAsync(
             Arg.Is<AuditEntry>(e => e.Action == "webhook.rejected.nonce_reused"));
 
         Assert.False(result);
