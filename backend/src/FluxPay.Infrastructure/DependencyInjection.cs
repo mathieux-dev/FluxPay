@@ -1,6 +1,8 @@
 using FluxPay.Core.Configuration;
+using FluxPay.Core.Providers;
 using FluxPay.Core.Services;
 using FluxPay.Infrastructure.Data;
+using FluxPay.Infrastructure.Providers;
 using FluxPay.Infrastructure.Redis;
 using FluxPay.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -48,6 +50,10 @@ public static class DependencyInjection
         services.AddSingleton<IRateLimiter, RateLimiter>();
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IAuditService, AuditService>();
+
+        services.AddHttpClient<PagarMeAdapter>();
+        services.AddHttpClient<GerencianetAdapter>();
+        services.AddScoped<IProviderFactory, ProviderFactory>();
 
         return services;
     }
