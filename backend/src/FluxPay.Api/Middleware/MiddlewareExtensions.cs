@@ -16,4 +16,9 @@ public static class MiddlewareExtensions
     {
         return builder.UseMiddleware<RateLimitingMiddleware>();
     }
+
+    public static IApplicationBuilder UseSecurityHeaders(this IApplicationBuilder builder)
+    {
+        return builder.UseMiddleware<SecurityHeadersMiddleware>();
+    }
 }
