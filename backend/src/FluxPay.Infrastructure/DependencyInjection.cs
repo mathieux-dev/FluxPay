@@ -51,6 +51,7 @@ public static class DependencyInjection
         services.AddScoped<IJwtService, JwtService>();
         services.AddScoped<IAuditService, AuditService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<ISubscriptionService, SubscriptionService>();
 
         services.AddHttpClient<PagarMeAdapter>();
         services.AddHttpClient<GerencianetAdapter>();
