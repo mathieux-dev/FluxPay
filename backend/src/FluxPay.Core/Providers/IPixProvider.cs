@@ -2,6 +2,7 @@ namespace FluxPay.Core.Providers;
 
 public interface IPixProvider
 {
+    bool IsSandbox { get; }
     Task<PixResult> CreatePixPaymentAsync(PixRequest request);
 }
 

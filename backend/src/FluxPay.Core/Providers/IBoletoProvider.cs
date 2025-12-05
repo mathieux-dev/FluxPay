@@ -2,6 +2,7 @@ namespace FluxPay.Core.Providers;
 
 public interface IBoletoProvider
 {
+    bool IsSandbox { get; }
     Task<BoletoResult> CreateBoletoPaymentAsync(BoletoRequest request);
 }
 
