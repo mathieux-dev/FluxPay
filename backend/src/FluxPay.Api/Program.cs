@@ -43,6 +43,13 @@ app.UseWhen(
         appBuilder.UseRateLimiting();
     });
 
+app.UseWhen(
+    context => context.Request.Path.StartsWithSegments("/v1/merchants"),
+    appBuilder =>
+    {
+        appBuilder.UseJwtAuthentication();
+    });
+
 app.UseAuthorization();
 app.MapControllers();
 
