@@ -4,7 +4,8 @@ namespace FluxPay.Infrastructure.Redis;
 
 public class RedisConnectionFactory
 {
-    private readonly Lazy<ConnectionMultiplexer> _connection;
+    private readonly Lazy<ConnectionMultiplexer>? _connection;
+    private readonly IDatabase? _database;
 
     public RedisConnectionFactory(string connectionString)
     {
@@ -12,13 +13,22 @@ public class RedisConnectionFactory
             ConnectionMultiplexer.Connect(connectionString));
     }
 
-    public IDatabase GetDatabase()
+    public RedisConnectionFactory(IDatabase database)
     {
-        return _connection.Value.GetDatabase();
+        _database = database;
+    }
+
+    public virtual IDatabase GetDatabase()
+    {
+        return _database ?? _connection!.Value.GetDatabase();
     }
 
     public IConnectionMultiplexer GetConnection()
     {
+        if (_connection == null)
+        {
+            throw new InvalidOperationException("Connection not available when using IDatabase constructor");
+        }
         return _connection.Value;
     }
 }
