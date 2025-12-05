@@ -250,6 +250,80 @@ public class GerencianetAdapter : IPixProvider, IBoletoProvider
         return Convert.ToBase64String(hashBytes);
     }
 
+    public async Task<List<ProviderTransactionReport>> GetTransactionReportAsync(DateTime date)
+    {
+        await EnsureAuthenticatedAsync();
+        
+        var startDate = date.Date;
+        var endDate = startDate.AddDays(1);
+        
+        var queryParams = $"?inicio={startDate:yyyy-MM-ddT00:00:00Z}&fim={endDate:yyyy-MM-ddT00:00:00Z}";
+        
+        try
+        {
+            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
+            var response = await _httpClient.GetAsync($"/v2/cob{queryParams}");
+            var content = await response.Content.ReadAsStringAsync();
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                return new List<ProviderTransactionReport>();
+            }
+
+            var data = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
+            var cobsArray = data?.GetValueOrDefault("cobs")?.ToString();
+            var cobs = cobsArray != null 
+                ? JsonSerializer.Deserialize<List<Dictionary<string, object>>>(cobsArray)
+                : new List<Dictionary<string, object>>();
+
+            var reports = new List<ProviderTransactionReport>();
+            
+            if (cobs != null)
+            {
+                foreach (var cob in cobs)
+                {
+                    var txid = cob.GetValueOrDefault("txid")?.ToString();
+                    var status = cob.GetValueOrDefault("status")?.ToString();
+                    
+                    var valorObj = cob.GetValueOrDefault("valor")?.ToString();
+                    var valor = valorObj != null 
+                        ? JsonSerializer.Deserialize<Dictionary<string, object>>(valorObj)
+                        : null;
+                    
+                    var originalStr = valor?.GetValueOrDefault("original")?.ToString();
+                    var amountCents = !string.IsNullOrEmpty(originalStr)
+                        ? (long)(decimal.Parse(originalStr) * 100)
+                        : 0;
+
+                    var calendarioObj = cob.GetValueOrDefault("calendario")?.ToString();
+                    var calendario = calendarioObj != null
+                        ? JsonSerializer.Deserialize<Dictionary<string, object>>(calendarioObj)
+                        : null;
+                    
+                    var criacaoStr = calendario?.GetValueOrDefault("criacao")?.ToString();
+                    var criacao = !string.IsNullOrEmpty(criacaoStr)
+                        ? DateTime.Parse(criacaoStr)
+                        : DateTime.UtcNow;
+
+                    reports.Add(new ProviderTransactionReport
+                    {
+                        ProviderPaymentId = txid ?? string.Empty,
+                        Status = status ?? "unknown",
+                        AmountCents = amountCents,
+                        TransactionDate = criacao,
+                        RawData = cob
+                    });
+                }
+            }
+
+            return reports;
+        }
+        catch (Exception)
+        {
+            return new List<ProviderTransactionReport>();
+        }
+    }
+
     private static bool ConstantTimeEquals(string a, string b)
     {
         if (a.Length != b.Length)

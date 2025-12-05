@@ -323,6 +323,79 @@ public class PagarMeAdapter : IProviderAdapter, ISubscriptionProvider
         return Convert.ToBase64String(hashBytes);
     }
 
+    public async Task<List<ProviderTransactionReport>> GetTransactionReportAsync(DateTime date)
+    {
+        var startDate = date.Date;
+        var endDate = startDate.AddDays(1);
+        
+        var queryParams = $"?created_since={startDate:yyyy-MM-ddTHH:mm:ssZ}&created_until={endDate:yyyy-MM-ddTHH:mm:ssZ}";
+        
+        try
+        {
+            var response = await _httpClient.GetAsync($"/orders{queryParams}");
+            var content = await response.Content.ReadAsStringAsync();
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                return new List<ProviderTransactionReport>();
+            }
+
+            var data = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
+            var ordersArray = data?.GetValueOrDefault("data")?.ToString();
+            var orders = ordersArray != null 
+                ? JsonSerializer.Deserialize<List<Dictionary<string, object>>>(ordersArray) 
+                : new List<Dictionary<string, object>>();
+
+            var reports = new List<ProviderTransactionReport>();
+            
+            if (orders != null)
+            {
+                foreach (var order in orders)
+                {
+                    var orderId = order.GetValueOrDefault("id")?.ToString();
+                    var chargesArray = order.GetValueOrDefault("charges")?.ToString();
+                    var charges = chargesArray != null 
+                        ? JsonSerializer.Deserialize<List<Dictionary<string, object>>>(chargesArray)
+                        : new List<Dictionary<string, object>>();
+
+                    if (charges != null)
+                    {
+                        foreach (var charge in charges)
+                        {
+                            var lastTransactionObj = charge.GetValueOrDefault("last_transaction")?.ToString();
+                            var lastTransaction = lastTransactionObj != null
+                                ? JsonSerializer.Deserialize<Dictionary<string, object>>(lastTransactionObj)
+                                : null;
+
+                            var amountValue = charge.GetValueOrDefault("amount");
+                            var amount = amountValue != null ? Convert.ToInt64(amountValue) : 0;
+
+                            var createdAtStr = charge.GetValueOrDefault("created_at")?.ToString();
+                            var createdAt = !string.IsNullOrEmpty(createdAtStr) 
+                                ? DateTime.Parse(createdAtStr) 
+                                : DateTime.UtcNow;
+
+                            reports.Add(new ProviderTransactionReport
+                            {
+                                ProviderPaymentId = orderId ?? string.Empty,
+                                Status = charge.GetValueOrDefault("status")?.ToString() ?? "unknown",
+                                AmountCents = amount,
+                                TransactionDate = createdAt,
+                                RawData = order
+                            });
+                        }
+                    }
+                }
+            }
+
+            return reports;
+        }
+        catch (Exception)
+        {
+            return new List<ProviderTransactionReport>();
+        }
+    }
+
     private static bool ConstantTimeEquals(string a, string b)
     {
         if (a.Length != b.Length)

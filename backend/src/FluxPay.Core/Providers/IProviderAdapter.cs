@@ -7,4 +7,5 @@ public interface IProviderAdapter
     Task<CaptureResult> CaptureAsync(string providerTransactionId, long amountCents);
     Task<RefundResult> RefundAsync(string providerTransactionId, long amountCents);
     Task<bool> ValidateWebhookSignatureAsync(string signature, string payload, long timestamp);
+    Task<List<ProviderTransactionReport>> GetTransactionReportAsync(DateTime date);
 }
