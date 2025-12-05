@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<ISubscriptionService, SubscriptionService>();
         services.AddScoped<IWebhookService, WebhookService>();
+        services.AddScoped<IAntifraudService, AntifraudService>();
 
         services.AddHttpClient<PagarMeAdapter>();
         services.AddHttpClient<GerencianetAdapter>();
