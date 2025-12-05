@@ -9,8 +9,10 @@ public class RedisConnectionFactory
 
     public RedisConnectionFactory(string connectionString)
     {
+        var options = ConfigurationOptions.Parse(connectionString);
+        
         _connection = new Lazy<ConnectionMultiplexer>(() => 
-            ConnectionMultiplexer.Connect(connectionString));
+            ConnectionMultiplexer.Connect(options));
     }
 
     public RedisConnectionFactory(IDatabase database)

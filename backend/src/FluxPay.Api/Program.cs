@@ -1,8 +1,101 @@
 using FluxPay.Api.Filters;
+using FluxPay.Api.Logging;
 using FluxPay.Api.Middleware;
+using FluxPay.Core.Configuration;
 using FluxPay.Infrastructure;
+using Npgsql;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Serilog;
+using Serilog.Formatting.Compact;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var openTelemetrySettings = builder.Configuration.GetSection("OpenTelemetry").Get<OpenTelemetrySettings>() 
+    ?? new OpenTelemetrySettings();
+
+var redisSettings = builder.Configuration.GetSection("Redis").Get<RedisSettings>() 
+    ?? new RedisSettings();
+
+var logflareSettings = builder.Configuration.GetSection("Logflare").Get<LogflareSettings>() 
+    ?? new LogflareSettings();
+
+var loggerConfig = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .Enrich.With<SensitiveDataMaskingEnricher>()
+    .Enrich.FromLogContext()
+    .Enrich.WithMachineName()
+    .Enrich.WithThreadId()
+    .Enrich.WithProperty("Application", openTelemetrySettings.ServiceName)
+    .Enrich.WithProperty("Environment", builder.Environment.EnvironmentName)
+    .WriteTo.Console(new CompactJsonFormatter());
+
+if (!string.IsNullOrEmpty(logflareSettings.ApiKey) && !string.IsNullOrEmpty(logflareSettings.SourceId))
+{
+    var httpClient = new System.Net.Http.HttpClient();
+    httpClient.DefaultRequestHeaders.Add("X-API-KEY", logflareSettings.ApiKey);
+    
+    loggerConfig.WriteTo.Http(
+        requestUri: $"https://api.logflare.app/logs?source={logflareSettings.SourceId}",
+        queueLimitBytes: null,
+        textFormatter: new CompactJsonFormatter(),
+        httpClient: new Serilog.Sinks.Http.HttpClients.JsonHttpClient(httpClient));
+}
+
+Log.Logger = loggerConfig.CreateLogger();
+
+builder.Host.UseSerilog();
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService(
+            serviceName: openTelemetrySettings.ServiceName,
+            serviceVersion: openTelemetrySettings.ServiceVersion))
+    .WithTracing(tracing =>
+    {
+        tracing
+            .AddAspNetCoreInstrumentation(options =>
+            {
+                options.RecordException = true;
+                options.Filter = (httpContext) =>
+                {
+                    return !httpContext.Request.Path.StartsWithSegments("/health");
+                };
+            })
+            .AddHttpClientInstrumentation(options =>
+            {
+                options.RecordException = true;
+            })
+            .AddNpgsql()
+            .AddRedisInstrumentation(
+                StackExchange.Redis.ConnectionMultiplexer.Connect(redisSettings.ConnectionString));
+
+        if (!string.IsNullOrEmpty(openTelemetrySettings.OtlpEndpoint))
+        {
+            tracing.AddOtlpExporter(options =>
+            {
+                options.Endpoint = new Uri(openTelemetrySettings.OtlpEndpoint);
+                
+                if (!string.IsNullOrEmpty(openTelemetrySettings.OtlpHeaders))
+                {
+                    var headers = openTelemetrySettings.OtlpHeaders.Split(',');
+                    foreach (var header in headers)
+                    {
+                        var parts = header.Split('=');
+                        if (parts.Length == 2)
+                        {
+                            options.Headers += $"{parts[0].Trim()}={parts[1].Trim()},";
+                        }
+                    }
+                    options.Headers = options.Headers.TrimEnd(',');
+                }
+            });
+        }
+        else
+        {
+            tracing.AddConsoleExporter();
+        }
+    });
 
 builder.Services.AddControllers(options =>
     {

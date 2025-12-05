@@ -41,8 +41,13 @@ public static class DependencyInjection
             }
         });
 
+        var redisFactory = new RedisConnectionFactory(redisSettings.ConnectionString);
+        services.AddSingleton(redisFactory);
         services.AddSingleton(sp => 
-            new RedisConnectionFactory(redisSettings.ConnectionString));
+        {
+            var factory = sp.GetRequiredService<RedisConnectionFactory>();
+            return factory.GetConnection();
+        });
 
         services.AddSingleton<IEncryptionService, EncryptionService>();
         services.AddSingleton<INonceStore, NonceStore>();
