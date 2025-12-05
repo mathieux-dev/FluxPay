@@ -108,6 +108,7 @@ public class PaymentService : IPaymentService
             AmountCents = request.AmountCents,
             ProviderTxId = refundResult.ProviderRefundId,
             Payload = refundResult.RawResponse != null ? JsonSerializer.Serialize(refundResult.RawResponse) : null,
+            IsTest = payment.IsTest,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -179,6 +180,7 @@ public class PaymentService : IPaymentService
             ProviderPaymentId = authResult.ProviderPaymentId,
             ProviderPayload = authResult.RawResponse != null ? JsonSerializer.Serialize(authResult.RawResponse) : null,
             Metadata = request.Metadata != null ? JsonSerializer.Serialize(request.Metadata) : null,
+            IsTest = provider.IsSandbox,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -192,6 +194,7 @@ public class PaymentService : IPaymentService
             AmountCents = request.AmountCents,
             ProviderTxId = authResult.ProviderTransactionId,
             Payload = authResult.RawResponse != null ? JsonSerializer.Serialize(authResult.RawResponse) : null,
+            IsTest = provider.IsSandbox,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -253,6 +256,7 @@ public class PaymentService : IPaymentService
             ProviderPaymentId = pixResult.ProviderPaymentId,
             ProviderPayload = pixResult.RawResponse != null ? JsonSerializer.Serialize(pixResult.RawResponse) : null,
             Metadata = request.Metadata != null ? JsonSerializer.Serialize(request.Metadata) : null,
+            IsTest = pixProvider.IsSandbox,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -320,6 +324,7 @@ public class PaymentService : IPaymentService
             ProviderPaymentId = boletoResult.ProviderPaymentId,
             ProviderPayload = boletoResult.RawResponse != null ? JsonSerializer.Serialize(boletoResult.RawResponse) : null,
             Metadata = request.Metadata != null ? JsonSerializer.Serialize(request.Metadata) : null,
+            IsTest = boletoProvider.IsSandbox,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
