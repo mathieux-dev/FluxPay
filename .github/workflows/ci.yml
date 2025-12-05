@@ -1,0 +1,226 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  DOCKER_IMAGE: fluxpay-api
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fluxpay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Restore dependencies
+        run: dotnet restore backend/FluxPay.sln
+      
+      - name: Build solution
+        run: dotnet build backend/FluxPay.sln --configuration Release --no-restore
+      
+      - name: Run unit tests
+        run: dotnet test backend/tests/FluxPay.Tests.Unit/FluxPay.Tests.Unit.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=unit-tests.trx"
+        env:
+          ConnectionStrings__DefaultConnection: "Host=localhost;Port=5432;Database=fluxpay_test;Username=postgres;Password=postgres"
+          Redis__ConnectionString: "localhost:6379"
+      
+      - name: Run property tests
+        run: dotnet test backend/tests/FluxPay.Tests.Unit/FluxPay.Tests.Unit.csproj --configuration Release --no-build --verbosity normal --filter "FullyQualifiedName~PropertyTests" --logger "trx;LogFileName=property-tests.trx"
+        env:
+          ConnectionStrings__DefaultConnection: "Host=localhost;Port=5432;Database=fluxpay_test;Username=postgres;Password=postgres"
+          Redis__ConnectionString: "localhost:6379"
+      
+      - name: Run integration tests
+        run: dotnet test backend/tests/FluxPay.Tests.Integration/FluxPay.Tests.Integration.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=integration-tests.trx"
+        env:
+          ConnectionStrings__DefaultConnection: "Host=localhost;Port=5432;Database=fluxpay_test;Username=postgres;Password=postgres"
+          Redis__ConnectionString: "localhost:6379"
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            **/TestResults/*.trx
+  
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Restore dependencies
+        run: dotnet restore backend/FluxPay.sln
+      
+      - name: Install dotnet-format
+        run: dotnet tool install -g dotnet-format
+      
+      - name: Run dotnet-format
+        run: dotnet format backend/FluxPay.sln --verify-no-changes --verbosity diagnostic
+      
+      - name: Build with Roslyn analyzers
+        run: dotnet build backend/FluxPay.sln --configuration Release /p:TreatWarningsAsErrors=true /p:EnforceCodeStyleInBuild=true
+  
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Restore dependencies
+        run: dotnet restore backend/FluxPay.sln
+      
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+      
+      - name: Build for CodeQL
+        run: dotnet build backend/FluxPay.sln --configuration Release --no-restore
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+      
+      - name: Run Snyk security scan
+        uses: snyk/actions/dotnet@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=backend/FluxPay.sln
+      
+      - name: Upload Snyk results to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: snyk.sarif
+  
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      
+      - name: Restore dependencies
+        run: dotnet restore backend/FluxPay.sln
+      
+      - name: Install dotnet list package
+        run: dotnet tool install -g dotnet-outdated-tool
+      
+      - name: Check for vulnerable packages
+        run: |
+          dotnet list backend/FluxPay.sln package --vulnerable --include-transitive 2>&1 | tee vulnerable-packages.txt
+          if grep -q "has the following vulnerable packages" vulnerable-packages.txt; then
+            echo "Vulnerable packages found!"
+            exit 1
+          fi
+      
+      - name: Upload vulnerability report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: vulnerability-report
+          path: vulnerable-packages.txt
+  
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [test, static-analysis, security-scan, dependency-scan]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}:buildcache,mode=max
