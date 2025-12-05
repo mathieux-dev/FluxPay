@@ -15,6 +15,7 @@ public class PagarMeAdapter : IProviderAdapter, ISubscriptionProvider
     private readonly bool _isSandbox;
 
     public string ProviderName => "pagarme";
+    public bool IsSandbox => _isSandbox;
 
     public PagarMeAdapter(HttpClient httpClient, IConfiguration configuration)
     {
@@ -23,7 +24,7 @@ public class PagarMeAdapter : IProviderAdapter, ISubscriptionProvider
         _webhookSecret = configuration["Providers:PagarMe:WebhookSecret"] ?? string.Empty;
         _isSandbox = configuration.GetValue<bool>("Providers:PagarMe:Sandbox");
         
-        var baseUrl = _isSandbox ? "https://api.pagar.me/core/v5" : "https://api.pagar.me/core/v5";
+        var baseUrl = _isSandbox ? "https://api.pagar.me/sandbox/v5" : "https://api.pagar.me/core/v5";
         _httpClient.BaseAddress = new Uri(baseUrl);
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_apiKey}:"))}");
     }

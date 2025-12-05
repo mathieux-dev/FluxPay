@@ -18,6 +18,7 @@ public class GerencianetAdapter : IPixProvider, IBoletoProvider
     private DateTime _tokenExpiry;
 
     public string ProviderName => "gerencianet";
+    public bool IsSandbox => _isSandbox;
 
     public GerencianetAdapter(HttpClient httpClient, IConfiguration configuration)
     {
@@ -27,7 +28,7 @@ public class GerencianetAdapter : IPixProvider, IBoletoProvider
         _webhookSecret = configuration["Providers:Gerencianet:WebhookSecret"] ?? string.Empty;
         _isSandbox = configuration.GetValue<bool>("Providers:Gerencianet:Sandbox");
         
-        var baseUrl = _isSandbox ? "https://api-pix-h.gerencianet.com.br" : "https://api-pix.gerencianet.com.br";
+        var baseUrl = _isSandbox ? "https://sandbox.gerencianet.com.br" : "https://api-pix.gerencianet.com.br";
         _httpClient.BaseAddress = new Uri(baseUrl);
     }
 
