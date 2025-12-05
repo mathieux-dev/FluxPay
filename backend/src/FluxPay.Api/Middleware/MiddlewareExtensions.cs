@@ -21,4 +21,9 @@ public static class MiddlewareExtensions
     {
         return builder.UseMiddleware<SecurityHeadersMiddleware>();
     }
+
+    public static IApplicationBuilder UseIpAllowlist(this IApplicationBuilder builder)
+    {
+        return builder.UseMiddleware<IpAllowlistMiddleware>();
+    }
 }

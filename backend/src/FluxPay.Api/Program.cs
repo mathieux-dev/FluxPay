@@ -50,6 +50,14 @@ app.UseWhen(
         appBuilder.UseJwtAuthentication();
     });
 
+app.UseWhen(
+    context => context.Request.Path.StartsWithSegments("/v1/admin"),
+    appBuilder =>
+    {
+        appBuilder.UseIpAllowlist();
+        appBuilder.UseJwtAuthentication();
+    });
+
 app.UseAuthorization();
 app.MapControllers();
 
