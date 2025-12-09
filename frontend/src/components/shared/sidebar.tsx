@@ -94,6 +94,11 @@ export const merchantNavItems: NavItem[] = [
     icon: <Repeat className="w-5 h-5" />,
   },
   {
+    href: '/api-docs',
+    label: 'Documentação API',
+    icon: <FileText className="w-5 h-5" />,
+  },
+  {
     href: '/settings',
     label: 'Configurações',
     icon: <Settings className="w-5 h-5" />,
